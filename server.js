@@ -6,7 +6,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const JUDGE0_URL = "http://localhost:2358";
+require("dotenv").config();
+
+const JUDGE0_URL = process.env.JUDGE0_URL;
 
 // Health check
 app.get("/", (req, res) => {
