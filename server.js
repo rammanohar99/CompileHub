@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
@@ -6,9 +8,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-require("dotenv").config();
+const JUDGE0_URL = process.env.JUDGE0_URL || "http://localhost:2358";
 
-const JUDGE0_URL = process.env.JUDGE0_URL;
+console.log("Judge0 URL:", JUDGE0_URL);
 
 // Health check
 app.get("/", (req, res) => {
@@ -27,7 +29,7 @@ app.post("/run", async (req, res) => {
 
     res.json(response.data);
   } catch (error) {
-    console.error(error.message);
+    console.error("ERROR:", error.message);
     res.status(500).json({ error: "Execution failed" });
   }
 });
