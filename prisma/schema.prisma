@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum SubmissionStatus {
+  PENDING
+  RUNNING
+  PASSED
+  FAILED
+  ERROR
+}
+
+enum SubscriptionPlan {
+  FREE
+  BASIC
+  PRO
+  PREMIUM
+}
+
+enum SubStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+// ─────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  password     String
+  role         Role          @default(USER)
+  createdAt    DateTime      @default(now())
+  submissions  Submission[]
+  subscription Subscription?
+  dailyUsage   DailyUsage[]
+}
+
+model Problem {
+  id          String       @id @default(cuid())
+  title       String
+  description String       @db.Text
+  difficulty  Difficulty
+  companies   String[]
+  tags        String[]
+  createdAt   DateTime     @default(now())
+  testCases   TestCase[]
+  submissions Submission[]
+}
+
+model TestCase {
+  id             String             @id @default(cuid())
+  problemId      String
+  problem        Problem            @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  input          String
+  expectedOutput String
+  isHidden       Boolean            @default(false)
+  results        SubmissionResult[]
+}
+
+model Submission {
+  id            String             @id @default(cuid())
+  userId        String
+  user          User               @relation(fields: [userId], references: [id])
+  problemId     String
+  problem       Problem            @relation(fields: [problemId], references: [id])
+  code          String             @db.Text
+  language      String
+  languageId    Int
+  status        SubmissionStatus   @default(PENDING)
+  executionTime Float?
+  createdAt     DateTime           @default(now())
+  results       SubmissionResult[]
+  feedback      Feedback?
+}
+
+model SubmissionResult {
+  id             String     @id @default(cuid())
+  submissionId   String
+  submission     Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  testCaseId     String
+  testCase       TestCase   @relation(fields: [testCaseId], references: [id])
+  stdout         String?
+  expectedOutput String
+  passed         Boolean
+  executionTime  Float?
+}
+
+model Feedback {
+  id           String     @id @default(cuid())
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  message      String     @db.Text
+  createdAt    DateTime   @default(now())
+}
+
+model Subscription {
+  id                String           @id @default(cuid())
+  userId            String           @unique
+  user              User             @relation(fields: [userId], references: [id])
+  plan              SubscriptionPlan @default(FREE)
+  status            SubStatus        @default(ACTIVE)
+  startsAt          DateTime         @default(now())
+  expiresAt         DateTime?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+model DailyUsage {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  date     String // "YYYY-MM-DD" UTC
+  runCount Int    @default(0)
+
+  @@unique([userId, date])
+}

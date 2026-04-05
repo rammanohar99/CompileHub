@@ -1,40 +1,35 @@
-require("dotenv").config();
+const app = require("./src/app");
+const logger = require("./src/utils/logger");
+const prisma = require("./src/utils/prismaClient");
 
-const express = require("express");
-const axios = require("axios");
-const cors = require("cors");
+const PORT = process.env.PORT || 5000;
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-const JUDGE0_URL = process.env.JUDGE0_URL || "http://localhost:2358";
-
-console.log("Judge0 URL:", JUDGE0_URL);
-
-// Health check
-app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
-});
-
-// Run code
-app.post("/run", async (req, res) => {
+const start = async () => {
   try {
-    const { source_code, language_id } = req.body;
+    // Verify DB connection before accepting traffic
+    await prisma.$connect();
+    logger.info("Database connected successfully");
 
-    const response = await axios.post(`${JUDGE0_URL}/submissions?wait=true`, {
-      source_code,
-      language_id,
+    app.listen(PORT, () => {
+      logger.info(`Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`);
     });
-
-    res.json(response.data);
-  } catch (error) {
-    console.error("ERROR:", error.message);
-    res.status(500).json({ error: "Execution failed" });
+  } catch (err) {
+    logger.error("Failed to start server:", err);
+    process.exit(1);
   }
+};
+
+// Graceful shutdown
+const shutdown = async (signal) => {
+  logger.info(`${signal} received — shutting down gracefully`);
+  await prisma.$disconnect();
+  process.exit(0);
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled Rejection:", reason);
 });
 
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+start();

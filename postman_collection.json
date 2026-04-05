@@ -1,0 +1,203 @@
+{
+  "info": {
+    "name": "Judge0 Backend API",
+    "_postman_id": "judge0-backend-collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000" },
+    { "key": "token",    "value": "" },
+    { "key": "problemId","value": "" },
+    { "key": "submissionId", "value": "" },
+    { "key": "userId",   "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/signup",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ram Manohar\",\n  \"email\": \"ram@example.com\",\n  \"password\": \"Password1\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.token) {",
+                  "  pm.collectionVariables.set('token', json.data.token);",
+                  "  pm.collectionVariables.set('userId', json.data.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ram@example.com\",\n  \"password\": \"Password1\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/auth/me",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Problems",
+      "item": [
+        {
+          "name": "Get All Problems",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/problems?difficulty=EASY&page=1&limit=10",
+              "query": [
+                { "key": "difficulty", "value": "EASY" },
+                { "key": "company",    "value": "",     "disabled": true },
+                { "key": "tag",        "value": "",     "disabled": true },
+                { "key": "page",       "value": "1" },
+                { "key": "limit",      "value": "10" }
+              ]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Problem by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/problems/{{problemId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Create Problem (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('problemId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/problems",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Two Sum\",\n  \"description\": \"Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.\",\n  \"difficulty\": \"EASY\",\n  \"companies\": [\"Amazon\", \"Google\"],\n  \"tags\": [\"Array\", \"Hash Table\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "Add Test Cases (Admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/problems/{{problemId}}/testcases",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"testCases\": [\n    {\n      \"input\": \"2 7 11 15\\n9\",\n      \"expectedOutput\": \"0 1\",\n      \"isHidden\": false\n    },\n    {\n      \"input\": \"3 2 4\\n6\",\n      \"expectedOutput\": \"1 2\",\n      \"isHidden\": true\n    }\n  ]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Submissions",
+      "item": [
+        {
+          "name": "Submit Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('submissionId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/submit",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"problemId\": \"{{problemId}}\",\n  \"languageId\": 71,\n  \"language\": \"Python 3\",\n  \"code\": \"# Read input\\nline1 = input().split()\\nnums = list(map(int, line1))\\ntarget = int(input())\\n\\n# Two sum\\nfor i in range(len(nums)):\\n    for j in range(i+1, len(nums)):\\n        if nums[i] + nums[j] == target:\\n            print(i, j)\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Submission by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/submissions/{{submissionId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get User Submissions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/users/{{userId}}/submissions?page=1&limit=10",
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "problemId", "value": "", "disabled": true }
+              ]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/health"
+      }
+    }
+  ]
+}
