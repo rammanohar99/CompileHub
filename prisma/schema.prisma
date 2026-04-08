@@ -57,6 +57,8 @@ model User {
   submissions  Submission[]
   subscription Subscription?
   dailyUsage   DailyUsage[]
+
+  systemDesignSubmissions SystemDesignSubmission[]
 }
 
 model Problem {
@@ -139,4 +141,42 @@ model DailyUsage {
   runCount Int    @default(0)
 
   @@unique([userId, date])
+}
+
+// ─────────────────────────────────────────────
+// System Design Module
+// ─────────────────────────────────────────────
+
+model SystemDesignQuestion {
+  id          String   @id @default(cuid())
+  title       String
+  difficulty  Difficulty
+  description String   @db.Text
+
+  // Functional & non-functional requirements
+  requirements String[]
+  // Scale, latency, storage constraints etc.
+  constraints  String[]
+  // Progressive hints without giving the full answer away
+  hints        String[]
+
+  // Stored as flexible JSON to support future diagram builder & AI feedback
+  // Shape: { overview, steps[], tradeoffs[], diagram }
+  solution Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submissions SystemDesignSubmission[]
+}
+
+model SystemDesignSubmission {
+  id         String               @id @default(cuid())
+  userId     String
+  user       User                 @relation(fields: [userId], references: [id])
+  questionId String
+  question   SystemDesignQuestion @relation(fields: [questionId], references: [id])
+  answerText String               @db.Text
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
 }

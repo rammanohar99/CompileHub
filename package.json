@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Production-ready coding practice backend with Judge0 integration",
   "main": "server.js",
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",

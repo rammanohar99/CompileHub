@@ -11,6 +11,7 @@ const problemRoutes = require("./routes/problemRoutes");
 const submissionRoutes = require("./routes/submissionRoutes");
 const userRoutes = require("./routes/userRoutes");
 const subscriptionRoutes = require("./routes/subscriptionRoutes");
+const systemDesignRoutes = require("./modules/systemDesign/routes");
 const { notFoundHandler, errorHandler } = require("./middlewares/errorMiddleware");
 const logger = require("./utils/logger");
 
@@ -64,6 +65,7 @@ app.use("/auth", authRoutes);
 app.use("/problems", problemRoutes);
 app.use("/users", userRoutes);
 app.use("/subscriptions", subscriptionRoutes);
+app.use("/system-design", systemDesignRoutes);
 app.use("/", submitLimiter, submissionRoutes); // /submit, /submissions/:id, /api/run
 
 // ── Error handling ────────────────────────────────────────────────────────────
