@@ -4,7 +4,10 @@
       "Bash(npm install:*)",
       "Bash(node -e \"const {z}=require\\('zod'\\); const s=z.object\\({email:z.string\\(\\).email\\(\\)}\\); console.log\\(s.safeParse\\({email:'test@x.com'}\\)\\)\")",
       "Bash(npx prisma:*)",
-      "Bash(mkdir -p logs)"
+      "Bash(mkdir -p logs)",
+      "Read(//c/workspace/scripts-learn/compilehub-frontend/src/api/**)",
+      "Read(//c/workspace/scripts-learn/compilehub-frontend/src/features/systemDesign/api/**)",
+      "Read(//c/workspace/scripts-learn/compilehub-frontend/src/components/**)"
     ]
   }
 }

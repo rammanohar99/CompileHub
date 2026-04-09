@@ -56,10 +56,10 @@ const login = async (req, res, next) => {
       where: { email },
       include: { subscription: true },
     });
-    if (!user) return unauthorized(res, "Invalid email or password");
+    if (!user) return unauthorized(res, "No account registered with this email");
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return unauthorized(res, "Invalid email or password");
+    if (!isMatch) return unauthorized(res, "Incorrect password");
 
     const token = signToken(user);
     logger.info(`User logged in: ${email}`);

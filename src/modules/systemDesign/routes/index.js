@@ -10,73 +10,74 @@ const {
   deleteQuestion,
 } = require("../controllers/questionController");
 
-const { submitAnswer, getMySubmissions, getSubmissionById } = require("../controllers/submissionController");
+const {
+  submitAnswer,
+  getMySubmissions,
+  getMyQuestionSubmissions,
+  getSubmissionById,
+} = require("../controllers/submissionController");
+
+const { getComments, postComment, toggleLike, deleteComment } = require("../controllers/commentController");
+const { getCanvas, saveCanvas } = require("../controllers/canvasController");
 
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Route ordering matters in Express.
 //
-// Static multi-segment paths  (/submissions/me, /submissions/:id)  must be
-// registered BEFORE single-segment dynamic paths (/:id) to prevent Express
-// from treating "submissions" as an :id value.
+// Static multi-segment paths MUST be registered before single-segment dynamic
+// paths (/:id) to prevent Express from treating a static segment as an :id.
 //
-// Within the submission sub-paths, /submissions/me must come BEFORE
-// /submissions/:submissionId so "me" is never captured as a submissionId.
+// Order:
+//   1. /submissions/me              (GET)
+//   2. /submissions/:submissionId   (GET)
+//   3. /comments/:commentId/like    (POST)  — 3 segments, before /:id
+//   4. /comments/:commentId         (DELETE)— must precede /:id (DELETE)
+//   5. /                            (GET, POST admin)
+//   6. /:id                         (GET, PUT admin, DELETE admin)
+//   7. /:id/submit                  (POST)
+//   8. /:questionId/submissions/me  (GET)
+//   9. /:questionId/comments        (GET, POST)
+//  10. /:questionId/canvas          (GET, PUT)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Submission routes (registered first — static paths take priority) ─────────
+// ── 1-2. Global submission list ───────────────────────────────────────────────
 
-/**
- * GET /api/system-design/submissions/me
- * Returns the authenticated user's own submissions (paginated).
- * Query: page, limit
- */
-router.get("/submissions/me", authMiddleware, getMySubmissions);
+router.get("/submissions/me",             authMiddleware, getMySubmissions);
+router.get("/submissions/:submissionId",  authMiddleware, getSubmissionById);
 
-/**
- * GET /api/system-design/submissions/:submissionId
- * Returns a single submission. Owner or ADMIN access only.
- */
-router.get("/submissions/:submissionId", authMiddleware, getSubmissionById);
+// ── 3-4. Comment actions (no questionId prefix) ───────────────────────────────
 
-// ── Question routes ───────────────────────────────────────────────────────────
+router.post("/comments/:commentId/like",  authMiddleware, toggleLike);
+router.delete("/comments/:commentId",     authMiddleware, deleteComment);
 
-/**
- * GET /api/system-design
- * Returns paginated list of questions (solution excluded).
- * Query: page, limit, difficulty, search
- */
-router.get("/", authMiddleware, getAllQuestions);
+// ── 5. Question list / create ─────────────────────────────────────────────────
 
-/**
- * GET /api/system-design/:id
- * Returns a single question with the full solution + hints.
- */
-router.get("/:id", authMiddleware, getQuestionById);
-
-/**
- * POST /api/system-design
- * Admin only. Creates a new system design question.
- */
+router.get("/",  authMiddleware, getAllQuestions);
 router.post("/", authMiddleware, requireRole("ADMIN"), createQuestion);
 
-/**
- * PUT /api/system-design/:id
- * Admin only. Partially updates a question.
- */
-router.put("/:id", authMiddleware, requireRole("ADMIN"), updateQuestion);
+// ── 6. Question detail / update / delete ──────────────────────────────────────
 
-/**
- * DELETE /api/system-design/:id
- * Admin only. Deletes a question and all its submissions.
- */
+router.get("/:id",    authMiddleware, getQuestionById);
+router.put("/:id",    authMiddleware, requireRole("ADMIN"), updateQuestion);
 router.delete("/:id", authMiddleware, requireRole("ADMIN"), deleteQuestion);
 
-/**
- * POST /api/system-design/:id/submit
- * Authenticated. Submits a written answer for a question.
- */
+// ── 7. Submit answer ──────────────────────────────────────────────────────────
+
 router.post("/:id/submit", authMiddleware, submitAnswer);
+
+// ── 8. Question-scoped submission history ─────────────────────────────────────
+
+router.get("/:questionId/submissions/me", authMiddleware, getMyQuestionSubmissions);
+
+// ── 9. Discussion comments ────────────────────────────────────────────────────
+
+router.get("/:questionId/comments",  authMiddleware, getComments);
+router.post("/:questionId/comments", authMiddleware, postComment);
+
+// ── 10. Canvas state ──────────────────────────────────────────────────────────
+
+router.get("/:questionId/canvas", authMiddleware, getCanvas);
+router.put("/:questionId/canvas", authMiddleware, saveCanvas);
 
 module.exports = router;

@@ -1,5 +1,5 @@
 const { Router } = require("express");
-const { submit, getSubmission, getUserSubmissions } = require("../controllers/submissionController");
+const { submit, getSubmission, getUserSubmissions, streamSubmit } = require("../controllers/submissionController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const { checkDailyRunLimit } = require("../middlewares/planMiddleware");
 const { validate } = require("../middlewares/validateMiddleware");
@@ -10,6 +10,7 @@ const { ok, badRequest } = require("../utils/apiResponse");
 const router = Router();
 
 router.post("/submit", authMiddleware, validate(submitSchema), submit);
+router.post("/submit/stream", authMiddleware, validate(submitSchema), streamSubmit);
 router.get("/submissions/:id", authMiddleware, getSubmission);
 
 // POST /api/run — ad-hoc code execution with plan-based daily rate limit

@@ -1,4 +1,5 @@
 const prisma = require("../../../utils/prismaClient");
+const cache = require("../../../utils/cache");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,10 @@ function buildWhereClause({ difficulty, search }) {
  * @returns {{ questions, total, page, limit, totalPages }}
  */
 async function getAllQuestions({ page, limit, difficulty, search }) {
+  const cacheKey = `sd_questions:${difficulty ?? ""}:${search ?? ""}:${page}:${limit}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
   const where = buildWhereClause({ difficulty, search });
   const skip = (page - 1) * limit;
 
@@ -44,7 +49,6 @@ async function getAllQuestions({ page, limit, difficulty, search }) {
       skip,
       take: limit,
       orderBy: { createdAt: "desc" },
-      // Exclude solution & hints from the list — serve them only on detail view
       select: {
         id: true,
         title: true,
@@ -59,13 +63,10 @@ async function getAllQuestions({ page, limit, difficulty, search }) {
     prisma.systemDesignQuestion.count({ where }),
   ]);
 
-  return {
-    questions,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
-  };
+  const result = { questions, total, page, limit, totalPages: Math.ceil(total / limit) };
+  cache.set(cacheKey, result, 300); // 5 min TTL
+
+  return result;
 }
 
 /**
@@ -94,6 +95,7 @@ async function getQuestionById(id) {
  */
 async function createQuestion(data) {
   const question = await prisma.systemDesignQuestion.create({ data });
+  cache.delByPrefix("sd_questions:");
   return question;
 }
 
@@ -122,6 +124,7 @@ async function updateQuestion(id, data) {
     data,
   });
 
+  cache.delByPrefix("sd_questions:");
   return question;
 }
 
@@ -145,6 +148,7 @@ async function deleteQuestion(id) {
   // Delete submissions first (no cascade configured in schema)
   await prisma.systemDesignSubmission.deleteMany({ where: { questionId: id } });
   await prisma.systemDesignQuestion.delete({ where: { id } });
+  cache.delByPrefix("sd_questions:");
 }
 
 module.exports = { getAllQuestions, getQuestionById, createQuestion, updateQuestion, deleteQuestion };

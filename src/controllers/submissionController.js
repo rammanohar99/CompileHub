@@ -1,4 +1,4 @@
-const { processSubmission } = require("../services/submissionService");
+const { processSubmission, processSubmissionStream } = require("../services/submissionService");
 const { getUserPlan } = require("../middlewares/planMiddleware");
 const prisma = require("../utils/prismaClient");
 const { ok, created, notFound, forbidden } = require("../utils/apiResponse");
@@ -56,10 +56,10 @@ const getSubmission = async (req, res, next) => {
   }
 };
 
-// GET /users/:id/submissions
+// GET /users/:userId/submissions
 const getUserSubmissions = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const id = req.params.userId ?? req.params.id;
     const { page = 1, limit = 20, problemId } = req.query;
 
     // Users can only view their own; admins can view anyone's
@@ -100,4 +100,32 @@ const getUserSubmissions = async (req, res, next) => {
   }
 };
 
-module.exports = { submit, getSubmission, getUserSubmissions };
+// POST /submit/stream — SSE: streams test case results as they run
+const streamSubmit = async (req, res, next) => {
+  const { problemId, code, languageId, language } = req.body;
+  const userId = req.user.id;
+
+  // Set SSE headers
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const emit = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Close SSE cleanly if client disconnects early
+  req.on("close", () => res.end());
+
+  try {
+    const userPlan = await getUserPlan(userId);
+    await processSubmissionStream(userId, problemId, code, languageId, language, userPlan, emit);
+  } catch (err) {
+    emit("error", { message: "Unexpected server error" });
+  } finally {
+    res.end();
+  }
+};
+
+module.exports = { submit, getSubmission, getUserSubmissions, streamSubmit };

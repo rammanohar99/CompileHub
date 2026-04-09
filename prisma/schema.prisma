@@ -43,6 +43,14 @@ enum SubStatus {
   CANCELLED
 }
 
+enum XpReasonType {
+  CODE_SUBMISSION_PASS
+  CODE_SUBMISSION_FAIL
+  CODE_FIRST_SOLVE_BONUS
+  SD_SUBMISSION
+  DAILY_STREAK_BONUS
+}
+
 // ─────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────
@@ -53,12 +61,17 @@ model User {
   email        String        @unique
   password     String
   role         Role          @default(USER)
+  xp           Int           @default(0)
   createdAt    DateTime      @default(now())
   submissions  Submission[]
   subscription Subscription?
   dailyUsage   DailyUsage[]
 
   systemDesignSubmissions SystemDesignSubmission[]
+  xpTransactions          XpTransaction[]
+  sdComments              SdComment[]
+  sdCommentLikes          SdCommentLike[]
+  sdCanvasStates          SdCanvasState[]
 }
 
 model Problem {
@@ -167,7 +180,9 @@ model SystemDesignQuestion {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  submissions SystemDesignSubmission[]
+  submissions  SystemDesignSubmission[]
+  sdComments   SdComment[]
+  sdCanvasStates SdCanvasState[]
 }
 
 model SystemDesignSubmission {
@@ -179,4 +194,63 @@ model SystemDesignSubmission {
   answerText String               @db.Text
   createdAt  DateTime             @default(now())
   updatedAt  DateTime             @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// XP System
+// ─────────────────────────────────────────────
+
+model XpTransaction {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  amount      Int
+  reason      XpReasonType
+  referenceId String?
+  createdAt   DateTime      @default(now())
+}
+
+// ─────────────────────────────────────────────
+// System Design — Discussion
+// ─────────────────────────────────────────────
+
+model SdComment {
+  id         String               @id @default(cuid())
+  questionId String
+  question   SystemDesignQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User                 @relation(fields: [userId], references: [id])
+  text       String               @db.Text
+  likesCount Int                  @default(0)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  likes      SdCommentLike[]
+}
+
+model SdCommentLike {
+  id        String    @id @default(cuid())
+  commentId String
+  comment   SdComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@unique([commentId, userId])
+}
+
+// ─────────────────────────────────────────────
+// System Design — Canvas State
+// ─────────────────────────────────────────────
+
+model SdCanvasState {
+  id         String               @id @default(cuid())
+  questionId String
+  question   SystemDesignQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User                 @relation(fields: [userId], references: [id])
+  nodesJson  String               @db.Text
+  edgesJson  String               @db.Text
+  updatedAt  DateTime             @updatedAt
+
+  @@unique([questionId, userId])
 }

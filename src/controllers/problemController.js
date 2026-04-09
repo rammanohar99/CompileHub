@@ -2,6 +2,7 @@ const prisma = require("../utils/prismaClient");
 const { ok, created, notFound, badRequest } = require("../utils/apiResponse");
 const { getUserPlan } = require("../middlewares/planMiddleware");
 const { buildTagStats } = require("./userController");
+const cache = require("../utils/cache");
 
 // Plan → max problems per request
 const PLAN_PROBLEM_LIMIT = { FREE: 10, BASIC: 50, PRO: 100, PREMIUM: 100 };
@@ -24,6 +25,10 @@ const getProblems = async (req, res, next) => {
     const take = Math.min(parseInt(limit), maxAllowed);
     const skip = (parseInt(page) - 1) * take;
 
+    const cacheKey = `problems:${difficulty ?? ""}:${company ?? ""}:${tag ?? ""}:${page}:${take}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return ok(res, "Problems fetched", cached);
+
     const [problems, total] = await Promise.all([
       prisma.problem.findMany({
         where,
@@ -43,10 +48,13 @@ const getProblems = async (req, res, next) => {
       prisma.problem.count({ where }),
     ]);
 
-    return ok(res, "Problems fetched", {
+    const data = {
       problems,
       pagination: { total, page: parseInt(page), limit: take, pages: Math.ceil(total / take) },
-    });
+    };
+    cache.set(cacheKey, data, 300); // 5 min TTL
+
+    return ok(res, "Problems fetched", data);
   } catch (err) {
     next(err);
   }
@@ -165,6 +173,8 @@ const createProblem = async (req, res, next) => {
     const problem = await prisma.problem.create({
       data: { title, description, difficulty, companies, tags },
     });
+
+    cache.delByPrefix("problems:"); // bust list cache
 
     return created(res, "Problem created", problem);
   } catch (err) {
