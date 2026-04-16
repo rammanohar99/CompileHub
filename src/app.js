@@ -12,6 +12,7 @@ const submissionRoutes = require("./routes/submissionRoutes");
 const userRoutes = require("./routes/userRoutes");
 const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const systemDesignRoutes = require("./modules/systemDesign/routes");
+const engFundamentalsRoutes = require("./routes/engFundamentalsRoutes");
 const { notFoundHandler, errorHandler } = require("./middlewares/errorMiddleware");
 const logger = require("./utils/logger");
 
@@ -66,7 +67,10 @@ app.use("/problems", problemRoutes);
 app.use("/users", userRoutes);
 app.use("/subscriptions", subscriptionRoutes);
 app.use("/system-design", systemDesignRoutes);
-app.use("/", submitLimiter, submissionRoutes); // /submit, /submissions/:id, /api/run
+app.use("/fundamentals", engFundamentalsRoutes);
+// submitLimiter is scoped only to code-execution paths, not every route
+app.use(["/submit", "/api/run"], submitLimiter);
+app.use("/", submissionRoutes); // /submit, /submit/stream, /submissions/:id, /api/run
 
 // ── Error handling ────────────────────────────────────────────────────────────
 app.use(notFoundHandler);

@@ -72,6 +72,12 @@ model User {
   sdComments              SdComment[]
   sdCommentLikes          SdCommentLike[]
   sdCanvasStates          SdCanvasState[]
+
+  // Engineering Fundamentals
+  topicProgress       UserTopicProgress[]
+  scenarioAttempts    UserScenarioAttempt[]
+  projectPrepSessions ProjectPrepSession[]
+  templateViews       UserTemplateView[]
 }
 
 model Problem {
@@ -253,4 +259,140 @@ model SdCanvasState {
   updatedAt  DateTime             @updatedAt
 
   @@unique([questionId, userId])
+}
+
+// ─────────────────────────────────────────────
+// Engineering Fundamentals — Fundamentals
+// ─────────────────────────────────────────────
+
+model FundamentalTopic {
+  id          String   @id @default(cuid())
+  title       String   @unique
+  description String
+  icon        String
+  accentColor String
+  borderColor String
+  glowColor   String
+  order       Int      @default(0)
+  isPublished Boolean  @default(true)
+  concepts    TopicConcept[]
+  qna         TopicQnA[]
+  quiz        TopicQuiz[]
+  progress    UserTopicProgress[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TopicConcept {
+  id      String           @id @default(cuid())
+  topicId String
+  topic   FundamentalTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  title   String
+  body    String           @db.Text
+  order   Int              @default(0)
+}
+
+model TopicQnA {
+  id       String           @id @default(cuid())
+  topicId  String
+  topic    FundamentalTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  question String           @db.Text
+  answer   String           @db.Text
+  order    Int              @default(0)
+}
+
+model TopicQuiz {
+  id           String           @id @default(cuid())
+  topicId      String
+  topic        FundamentalTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  question     String           @db.Text
+  options      Json
+  correctIndex Int
+  explanation  String           @db.Text
+  order        Int              @default(0)
+}
+
+model UserTopicProgress {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId     String
+  topic       FundamentalTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  completedAt DateTime         @default(now())
+
+  @@unique([userId, topicId])
+}
+
+// ─────────────────────────────────────────────
+// Engineering Fundamentals — Debugging Lab
+// ─────────────────────────────────────────────
+
+model DebugScenario {
+  id           String   @id @default(cuid())
+  title        String   @unique
+  description  String   @db.Text
+  difficulty   Difficulty
+  hypotheses   Json
+  correctIndex Int
+  explanation  String   @db.Text
+  isPublished  Boolean  @default(true)
+  order        Int      @default(0)
+  attempts     UserScenarioAttempt[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model UserScenarioAttempt {
+  id         String        @id @default(cuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenarioId String
+  scenario   DebugScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  picked     Int
+  correct    Boolean
+  createdAt  DateTime      @default(now())
+
+  @@unique([userId, scenarioId])
+}
+
+// ─────────────────────────────────────────────
+// Engineering Fundamentals — Project Prep
+// ─────────────────────────────────────────────
+
+model ProjectPrepSession {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description String   @db.Text
+  questions   Json
+  createdAt   DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// Engineering Fundamentals — Communication
+// ─────────────────────────────────────────────
+
+model CommTemplate {
+  id          String   @id @default(cuid())
+  title       String   @unique
+  description String
+  icon        String
+  steps       Json
+  example     String   @db.Text
+  order       Int      @default(0)
+  isPublished Boolean  @default(true)
+  views       UserTemplateView[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UserTemplateView {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateId String
+  template   CommTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  viewedAt   DateTime     @default(now())
+
+  @@unique([userId, templateId])
 }

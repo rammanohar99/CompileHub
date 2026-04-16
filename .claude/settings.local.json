@@ -7,7 +7,14 @@
       "Bash(mkdir -p logs)",
       "Read(//c/workspace/scripts-learn/compilehub-frontend/src/api/**)",
       "Read(//c/workspace/scripts-learn/compilehub-frontend/src/features/systemDesign/api/**)",
-      "Read(//c/workspace/scripts-learn/compilehub-frontend/src/components/**)"
+      "Read(//c/workspace/scripts-learn/compilehub-frontend/src/components/**)",
+      "Bash(node src/seed/engFundamentals.seed.js)",
+      "Bash(grep -n \" \\\\`[a-zA-Z_]\" \"c:/workspace/scripts-learn/judge0-backend/src/seed/engFundamentals.seed.js\")",
+      "Bash(node --input-type=module)",
+      "Bash(node -c \"c:/workspace/scripts-learn/judge0-backend/src/seed/engFundamentals.seed.js\")",
+      "Bash(node -e \"const app = require\\('./src/app'\\); console.log\\('App loaded OK'\\);\")",
+      "Bash(npm uninstall:*)",
+      "Bash(node -e \"const { VertexAI } = require\\('@google-cloud/vertexai'\\); console.log\\('OK'\\);\")"
     ]
   }
 }
