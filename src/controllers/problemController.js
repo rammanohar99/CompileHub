@@ -188,7 +188,7 @@ const addTestCases = async (req, res, next) => {
     const { id } = req.params;
     const { testCases } = req.body;
 
-    const problem = await prisma.problem.findUnique({ where: { id } });
+    const problem = await prisma.problem.findUnique({ where: { id }, select: { id: true } });
     if (!problem) return notFound(res, "Problem not found");
 
     const created_cases = await prisma.$transaction(

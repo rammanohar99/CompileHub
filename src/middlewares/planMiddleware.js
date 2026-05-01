@@ -1,5 +1,6 @@
 const prisma = require("../utils/prismaClient");
 const { forbidden, tooMany } = require("../utils/apiResponse");
+const cache = require("../utils/cache");
 
 const PLAN_ORDER = { FREE: 0, BASIC: 1, PRO: 2, PREMIUM: 3 };
 const FREE_BASIC_DAILY_LIMIT = 5;
@@ -9,8 +10,17 @@ const FREE_BASIC_DAILY_LIMIT = 5;
  * Falls back to FREE if no subscription record exists.
  */
 const getUserPlan = async (userId) => {
-  const sub = await prisma.subscription.findUnique({ where: { userId } });
-  return sub?.plan ?? "FREE";
+  const cacheKey = `plan:${userId}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const sub = await prisma.subscription.findUnique({
+    where: { userId },
+    select: { plan: true },
+  });
+  const plan = sub?.plan ?? "FREE";
+  cache.set(cacheKey, plan, 60);
+  return plan;
 };
 
 /**

@@ -1,12 +1,36 @@
 const { PrismaClient } = require("@prisma/client");
 const logger = require("./logger");
 
+const DEFAULT_POOL_SIZE = parseInt(process.env.PRISMA_POOL_MAX || "10", 10);
+const DEFAULT_POOL_TIMEOUT_S = parseInt(process.env.PRISMA_POOL_TIMEOUT_S || "30", 10);
+const DEFAULT_CONNECT_TIMEOUT_S = parseInt(process.env.PRISMA_CONNECT_TIMEOUT_S || "15", 10);
+
+function withPoolConfig(urlString) {
+  if (!urlString) return urlString;
+  try {
+    const url = new URL(urlString);
+    if (!url.searchParams.has("connection_limit")) {
+      url.searchParams.set("connection_limit", String(DEFAULT_POOL_SIZE));
+    }
+    if (!url.searchParams.has("pool_timeout")) {
+      url.searchParams.set("pool_timeout", String(DEFAULT_POOL_TIMEOUT_S));
+    }
+    if (!url.searchParams.has("connect_timeout")) {
+      url.searchParams.set("connect_timeout", String(DEFAULT_CONNECT_TIMEOUT_S));
+    }
+    return url.toString();
+  } catch {
+    // Fall back to raw URL if it's not parseable.
+    return urlString;
+  }
+}
+
 const prisma =
   global.__prisma ||
   new PrismaClient({
     log: ["error"],
     datasources: {
-      db: { url: process.env.DATABASE_URL },
+      db: { url: withPoolConfig(process.env.DATABASE_URL) },
     },
   });
 

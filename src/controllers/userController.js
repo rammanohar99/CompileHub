@@ -1,5 +1,6 @@
 const prisma = require("../utils/prismaClient");
 const { ok, forbidden, notFound, badRequest } = require("../utils/apiResponse");
+const cache = require("../utils/cache");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,17 @@ const CURRICULUM = [
   "Dynamic Programming",
 ];
 const LP_THRESHOLD = 3; // solves needed to mark a topic done
+const AGG_CACHE_TTL_SECONDS = 60;
+const PROBLEMS_TAGS_CACHE_KEY = "problems:tags:minimal";
+
+async function getProblemsTagsSnapshot() {
+  let problems = cache.get(PROBLEMS_TAGS_CACHE_KEY);
+  if (!problems) {
+    problems = await prisma.problem.findMany({ select: { id: true, tags: true } });
+    cache.set(PROBLEMS_TAGS_CACHE_KEY, problems, 300);
+  }
+  return problems;
+}
 
 // ── GET /users/:userId/stats ──────────────────────────────────────────────────
 
@@ -78,13 +90,20 @@ const getUserStats = async (req, res, next) => {
       return forbidden(res, "You can only view your own stats");
     }
 
-    const [user, submissions, sdCount] = await Promise.all([
+    const cacheKey = `user:stats:${userId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return ok(res, "Stats fetched", cached);
+
+    const [user, submissions, sdSubmissions] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId }, select: { xp: true } }),
       prisma.submission.findMany({
         where: { userId },
         select: { problemId: true, status: true, createdAt: true },
       }),
-      prisma.systemDesignSubmission.count({ where: { userId } }),
+      prisma.systemDesignSubmission.findMany({
+        where: { userId },
+        select: { createdAt: true },
+      }),
     ]);
 
     if (!user) return notFound(res, "User not found");
@@ -106,11 +125,6 @@ const getUserStats = async (req, res, next) => {
         : 0;
 
     // Streak — union code + SD dates
-    const sdSubmissions = await prisma.systemDesignSubmission.findMany({
-      where: { userId },
-      select: { createdAt: true },
-    });
-
     const allDates = [
       ...submissions.map((s) => toDateStr(s.createdAt)),
       ...sdSubmissions.map((s) => toDateStr(s.createdAt)),
@@ -118,7 +132,7 @@ const getUserStats = async (req, res, next) => {
     const sortedUniqueDays = Array.from(new Set(allDates)).sort();
     const { currentStreak, longestStreak } = computeStreaks(sortedUniqueDays);
 
-    return ok(res, "Stats fetched", {
+    const data = {
       xp: user.xp,
       level,
       xpToNextLevel,
@@ -128,8 +142,10 @@ const getUserStats = async (req, res, next) => {
       problemsSolved: passedIds.size,
       totalSubmissions,
       acceptanceRate,
-      sdAnswersSubmitted: sdCount,
-    });
+      sdAnswersSubmitted: sdSubmissions.length,
+    };
+    cache.set(cacheKey, data, AGG_CACHE_TTL_SECONDS);
+    return ok(res, "Stats fetched", data);
   } catch (err) {
     next(err);
   }
@@ -158,28 +174,29 @@ const getUserActivity = async (req, res, next) => {
       return badRequest(res, "Invalid date format");
     }
 
-    // Fetch both submission types in parallel, group by UTC date in JS
-    const dateFilter = { gte: fromDate, lte: toDate };
-    const [codeRows, sdRows] = await Promise.all([
-      prisma.submission.findMany({
-        where: { userId, createdAt: dateFilter },
-        select: { createdAt: true },
-      }),
-      prisma.systemDesignSubmission.findMany({
-        where: { userId, createdAt: dateFilter },
-        select: { createdAt: true },
-      }),
-    ]);
+    const fromKey = fromDate.toISOString().slice(0, 10);
+    const toKey = toDate.toISOString().slice(0, 10);
+    const cacheKey = `user:activity:${userId}:${fromKey}:${toKey}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return ok(res, "Activity fetched", { activity: cached });
 
-    const countByDate = new Map();
-    for (const { createdAt } of [...codeRows, ...sdRows]) {
-      const date = createdAt.toISOString().slice(0, 10); // "YYYY-MM-DD"
-      countByDate.set(date, (countByDate.get(date) ?? 0) + 1);
-    }
-
-    const activity = Array.from(countByDate.entries())
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const activity = await prisma.$queryRaw`
+      SELECT date, SUM(count)::int AS count
+      FROM (
+        SELECT TO_CHAR("createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
+        FROM "Submission"
+        WHERE "userId" = ${userId} AND "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
+        GROUP BY 1
+        UNION ALL
+        SELECT TO_CHAR("createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
+        FROM "SystemDesignSubmission"
+        WHERE "userId" = ${userId} AND "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
+        GROUP BY 1
+      ) t
+      GROUP BY date
+      ORDER BY date ASC
+    `;
+    cache.set(cacheKey, activity, AGG_CACHE_TTL_SECONDS);
 
     return ok(res, "Activity fetched", { activity });
   } catch (err) {
@@ -197,15 +214,17 @@ const getTopicStrength = async (req, res, next) => {
       return forbidden(res, "You can only view your own topic strength");
     }
 
-    // All problems with tags
-    const problems = await prisma.problem.findMany({
-      select: { id: true, tags: true },
-    });
+    const cacheKey = `user:topic-strength:${userId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return ok(res, "Topic strength fetched", { topics: cached });
+
+    const problems = await getProblemsTagsSnapshot();
 
     // Unique problems the user has PASSED
     const passedSubmissions = await prisma.submission.findMany({
       where: { userId, status: "PASSED" },
-      select: { problemId: true, createdAt: true },
+      select: { problemId: true },
+      distinct: ["problemId"],
     });
 
     const solvedProblemIds = new Set(passedSubmissions.map((s) => s.problemId));
@@ -231,6 +250,7 @@ const getTopicStrength = async (req, res, next) => {
       .sort((a, b) => a.score - b.score) // weakest first
       .slice(0, 8);
 
+    cache.set(cacheKey, topics, AGG_CACHE_TTL_SECONDS);
     return ok(res, "Topic strength fetched", { topics });
   } catch (err) {
     next(err);
@@ -247,10 +267,11 @@ const getLearningPath = async (req, res, next) => {
       return forbidden(res, "You can only view your own learning path");
     }
 
-    // Problems grouped by tag
-    const problems = await prisma.problem.findMany({
-      select: { id: true, tags: true },
-    });
+    const cacheKey = `user:learning-path:${userId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return ok(res, "Learning path fetched", cached);
+
+    const problems = await getProblemsTagsSnapshot();
 
     // All PASSED submissions for this user, ordered by createdAt
     const passedSubs = await prisma.submission.findMany({
@@ -315,11 +336,13 @@ const getLearningPath = async (req, res, next) => {
 
     const completedCount = topicsResult.filter((t) => t.done).length;
 
-    return ok(res, "Learning path fetched", {
+    const data = {
       topics: topicsResult,
       completedCount,
       totalCount: CURRICULUM.length,
-    });
+    };
+    cache.set(cacheKey, data, AGG_CACHE_TTL_SECONDS);
+    return ok(res, "Learning path fetched", data);
   } catch (err) {
     next(err);
   }

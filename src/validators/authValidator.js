@@ -15,4 +15,18 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-module.exports = { signupSchema, loginSchema };
+const refreshSchema = z.object({
+  refreshToken: z.string().min(1, "refreshToken is required"),
+});
+
+const logoutSchema = z
+  .object({
+    refreshToken: z.string().min(1).optional(),
+    allSessions: z.boolean().optional(),
+  })
+  .refine((data) => data.allSessions === true || !!data.refreshToken, {
+    message: "refreshToken is required unless allSessions=true",
+    path: ["refreshToken"],
+  });
+
+module.exports = { signupSchema, loginSchema, refreshSchema, logoutSchema };

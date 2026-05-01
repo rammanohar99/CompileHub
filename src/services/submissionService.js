@@ -26,7 +26,12 @@ const processSubmission = async (userId, problemId, code, languageId, language, 
   // ── 1. Fetch test cases ────────────────────────────────────────────────
   const problem = await prisma.problem.findUnique({
     where: { id: problemId },
-    include: { testCases: true },
+    select: {
+      id: true,
+      testCases: {
+        select: { id: true, input: true, expectedOutput: true, isHidden: true },
+      },
+    },
   });
 
   if (!problem) {
@@ -161,7 +166,12 @@ const processSubmissionStream = async (userId, problemId, code, languageId, lang
   // ── 1. Fetch test cases ────────────────────────────────────────────────
   const problem = await prisma.problem.findUnique({
     where: { id: problemId },
-    include: { testCases: true },
+    select: {
+      id: true,
+      testCases: {
+        select: { id: true, input: true, expectedOutput: true, isHidden: true },
+      },
+    },
   });
 
   if (!problem) {

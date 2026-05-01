@@ -78,6 +78,21 @@ model User {
   scenarioAttempts    UserScenarioAttempt[]
   projectPrepSessions ProjectPrepSession[]
   templateViews       UserTemplateView[]
+  refreshTokens       RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, revoked])
+  @@index([expiresAt])
 }
 
 model Problem {

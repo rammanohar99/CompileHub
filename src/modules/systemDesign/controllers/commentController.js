@@ -18,8 +18,7 @@ function parsePagination(query, defaultLimit = 20) {
   return { page, limit };
 }
 
-function formatComment(comment, requestingUserId) {
-  const likedByMe = comment.likes?.some((l) => l.userId === requestingUserId) ?? false;
+function formatComment(comment, likedByMe = false) {
   return {
     id: comment.id,
     user: {
@@ -49,16 +48,29 @@ const getComments = async (req, res, next) => {
         skip,
         take: limit,
         orderBy: { createdAt: "desc" },
-        include: {
+        select: {
+          id: true,
+          text: true,
+          likesCount: true,
+          createdAt: true,
           user: { select: { id: true, name: true } },
-          likes: { select: { userId: true } },
         },
       }),
       prisma.sdComment.count({ where: { questionId } }),
     ]);
 
+    const commentIds = comments.map((c) => c.id);
+    let likedSet = new Set();
+    if (commentIds.length > 0) {
+      const likedRows = await prisma.sdCommentLike.findMany({
+        where: { userId: req.user.id, commentId: { in: commentIds } },
+        select: { commentId: true },
+      });
+      likedSet = new Set(likedRows.map((row) => row.commentId));
+    }
+
     return ok(res, "Comments fetched", {
-      comments: comments.map((c) => formatComment(c, req.user.id)),
+      comments: comments.map((c) => formatComment(c, likedSet.has(c.id))),
       total,
       page,
       totalPages: Math.ceil(total / limit),
@@ -92,13 +104,16 @@ const postComment = async (req, res, next) => {
 
     const comment = await prisma.sdComment.create({
       data: { questionId, userId: req.user.id, text: trimmed },
-      include: {
+      select: {
+        id: true,
+        text: true,
+        likesCount: true,
+        createdAt: true,
         user: { select: { id: true, name: true } },
-        likes: { select: { userId: true } },
       },
     });
 
-    return created(res, "Comment posted", formatComment(comment, req.user.id));
+    return created(res, "Comment posted", formatComment(comment, false));
   } catch (err) {
     next(err);
   }
@@ -126,13 +141,13 @@ const toggleLike = async (req, res, next) => {
 
     if (existing) {
       // Remove like
-      await prisma.$transaction([
-        prisma.sdCommentLike.delete({ where: { id: existing.id } }),
-        prisma.sdComment.update({
+      await prisma.$transaction(async (tx) => {
+        await tx.sdCommentLike.delete({ where: { id: existing.id } });
+        await tx.sdComment.update({
           where: { id: commentId },
           data: { likesCount: { decrement: 1 } },
-        }),
-      ]);
+        });
+      });
       liked = false;
       updatedComment = await prisma.sdComment.findUnique({
         where: { id: commentId },
@@ -140,14 +155,14 @@ const toggleLike = async (req, res, next) => {
       });
     } else {
       // Add like
-      [, updatedComment] = await prisma.$transaction([
-        prisma.sdCommentLike.create({ data: { commentId, userId } }),
-        prisma.sdComment.update({
+      updatedComment = await prisma.$transaction(async (tx) => {
+        await tx.sdCommentLike.create({ data: { commentId, userId } });
+        return tx.sdComment.update({
           where: { id: commentId },
           data: { likesCount: { increment: 1 } },
           select: { likesCount: true },
-        }),
-      ]);
+        });
+      });
       liked = true;
     }
 
