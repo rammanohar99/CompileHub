@@ -49,6 +49,34 @@ enum XpReasonType {
   CODE_FIRST_SOLVE_BONUS
   SD_SUBMISSION
   DAILY_STREAK_BONUS
+  ASSESSMENT_COMPLETION
+}
+
+enum AssessmentQuestionType {
+  MCQ
+  MULTI_SELECT
+  TRUE_FALSE
+  CODE_OUTPUT
+  SCENARIO_BASED
+}
+
+enum AssessmentDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum AssessmentAttemptStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum AssessmentReviewStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
 }
 
 // ─────────────────────────────────────────────
@@ -79,6 +107,11 @@ model User {
   projectPrepSessions ProjectPrepSession[]
   templateViews       UserTemplateView[]
   refreshTokens       RefreshToken[]
+  assessmentQuestionsCreated AssessmentQuestion[]      @relation("AssessmentQuestionCreatedBy")
+  assessmentAttempts         AssessmentAttempt[]
+  assessmentAnswerEvents     AssessmentAnswerEvent[]
+  bookmarkedQuestions        AssessmentQuestionBookmark[]
+  generatedAssessments       GeneratedAssessment[]
 }
 
 model RefreshToken {
@@ -410,4 +443,157 @@ model UserTemplateView {
   viewedAt   DateTime     @default(now())
 
   @@unique([userId, templateId])
+}
+
+model AssessmentCategory {
+  id          String            @id @default(cuid())
+  name        String
+  slug        String            @unique
+  description String?
+  icon        String?
+  isActive    Boolean           @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  topics      AssessmentTopic[]
+  questions   AssessmentQuestion[]
+  generatedAssessments GeneratedAssessment[]
+
+  @@index([isActive, createdAt])
+}
+
+model AssessmentTopic {
+  id          String               @id @default(cuid())
+  categoryId  String
+  category    AssessmentCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  description String?
+  isActive    Boolean              @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  questions   AssessmentQuestion[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId, isActive, createdAt])
+}
+
+model AssessmentQuestion {
+  id                    String                       @id @default(cuid())
+  categoryId            String
+  category              AssessmentCategory           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  topicId               String?
+  topic                 AssessmentTopic?             @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  questionType          AssessmentQuestionType
+  difficulty            AssessmentDifficulty
+  question              String                       @db.Text
+  options               Json?
+  correctAnswer         Json
+  explanation           String?                      @db.Text
+  tags                  String[]
+  isActive              Boolean                      @default(true)
+  estimatedTimeSeconds  Int                          @default(60)
+  metadata              Json?
+  reviewStatus          AssessmentReviewStatus       @default(DRAFT)
+  createdBy             String
+  creator               User                         @relation("AssessmentQuestionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  deletedAt             DateTime?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  generatedItems        GeneratedAssessmentQuestion[]
+  answerEvents          AssessmentAnswerEvent[]
+  bookmarks             AssessmentQuestionBookmark[]
+
+  @@index([categoryId, topicId, difficulty, questionType])
+  @@index([isActive, reviewStatus, createdAt])
+  @@index([createdBy, createdAt])
+}
+
+model GeneratedAssessment {
+  id                    String                        @id @default(cuid())
+  generatedBy           String
+  generator             User                          @relation(fields: [generatedBy], references: [id], onDelete: Restrict)
+  title                 String?
+  categoryId            String?
+  category              AssessmentCategory?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  config                Json
+  estimatedDurationSecs Int
+  questionCount         Int
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
+  questions             GeneratedAssessmentQuestion[]
+  attempts              AssessmentAttempt[]
+
+  @@index([generatedBy, createdAt])
+}
+
+model GeneratedAssessmentQuestion {
+  id             String               @id @default(cuid())
+  assessmentId   String
+  assessment     GeneratedAssessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       AssessmentQuestion   @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  sequence       Int
+  createdAt      DateTime             @default(now())
+
+  @@unique([assessmentId, questionId])
+  @@unique([assessmentId, sequence])
+  @@index([questionId])
+}
+
+model AssessmentAttempt {
+  id                    String                  @id @default(cuid())
+  userId                String
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessmentId          String
+  assessment            GeneratedAssessment     @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  status                AssessmentAttemptStatus @default(IN_PROGRESS)
+  startedAt             DateTime                @default(now())
+  endedAt               DateTime?
+  totalQuestions        Int                     @default(0)
+  answeredQuestions     Int                     @default(0)
+  score                 Float                   @default(0)
+  accuracy              Float                   @default(0)
+  totalTimeSpentSeconds Int                     @default(0)
+  metadata              Json?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  answerEvents          AssessmentAnswerEvent[]
+
+  @@index([userId, createdAt])
+  @@index([assessmentId, createdAt])
+}
+
+model AssessmentAnswerEvent {
+  id                  String              @id @default(cuid())
+  attemptId           String
+  attempt             AssessmentAttempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId          String
+  question            AssessmentQuestion  @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  userId              String
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  selectedAnswer      Json?
+  isCorrect           Boolean?
+  markedForReview     Boolean             @default(false)
+  confidenceLevel     Int?
+  timeSpentSeconds    Int                 @default(0)
+  isFinal             Boolean             @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@unique([attemptId, questionId])
+  @@index([userId, createdAt])
+}
+
+model AssessmentQuestionBookmark {
+  id         String              @id @default(cuid())
+  userId     String
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId String
+  question   AssessmentQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime            @default(now())
+
+  @@unique([userId, questionId])
+  @@index([questionId])
 }

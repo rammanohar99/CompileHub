@@ -94,7 +94,7 @@ const getUserStats = async (req, res, next) => {
     const cached = cache.get(cacheKey);
     if (cached) return ok(res, "Stats fetched", cached);
 
-    const [user, submissions, sdSubmissions] = await Promise.all([
+    const [user, submissions, sdSubmissions, assessmentAttempts] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId }, select: { xp: true } }),
       prisma.submission.findMany({
         where: { userId },
@@ -103,6 +103,10 @@ const getUserStats = async (req, res, next) => {
       prisma.systemDesignSubmission.findMany({
         where: { userId },
         select: { createdAt: true },
+      }),
+      prisma.assessmentAttempt.findMany({
+        where: { userId, status: "COMPLETED" },
+        select: { createdAt: true, accuracy: true },
       }),
     ]);
 
@@ -124,13 +128,20 @@ const getUserStats = async (req, res, next) => {
         ? Math.round((passedCount / totalSubmissions) * 1000) / 10  // 1 decimal
         : 0;
 
-    // Streak — union code + SD dates
+    // Streak — union code + SD + assessment dates
     const allDates = [
       ...submissions.map((s) => toDateStr(s.createdAt)),
       ...sdSubmissions.map((s) => toDateStr(s.createdAt)),
+      ...assessmentAttempts.map((a) => toDateStr(a.createdAt)),
     ];
     const sortedUniqueDays = Array.from(new Set(allDates)).sort();
     const { currentStreak, longestStreak } = computeStreaks(sortedUniqueDays);
+
+    const assessmentsCompleted = assessmentAttempts.length;
+    const averageAssessmentAccuracy =
+      assessmentsCompleted > 0
+        ? Math.round(assessmentAttempts.reduce((sum, a) => sum + (a.accuracy || 0), 0) / assessmentsCompleted * 10) / 10
+        : 0;
 
     const data = {
       xp: user.xp,
@@ -143,6 +154,8 @@ const getUserStats = async (req, res, next) => {
       totalSubmissions,
       acceptanceRate,
       sdAnswersSubmitted: sdSubmissions.length,
+      assessmentsCompleted,
+      averageAssessmentAccuracy,
     };
     cache.set(cacheKey, data, AGG_CACHE_TTL_SECONDS);
     return ok(res, "Stats fetched", data);
@@ -191,6 +204,11 @@ const getUserActivity = async (req, res, next) => {
         SELECT TO_CHAR("createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
         FROM "SystemDesignSubmission"
         WHERE "userId" = ${userId} AND "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
+        GROUP BY 1
+        UNION ALL
+        SELECT TO_CHAR("createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
+        FROM "AssessmentAttempt"
+        WHERE "userId" = ${userId} AND status = 'COMPLETED' AND "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
         GROUP BY 1
       ) t
       GROUP BY date

@@ -5,9 +5,17 @@ const { badRequest } = require("../utils/apiResponse");
  * On failure, returns 400 with a structured list of field errors.
  */
 const validate = (schema) => (req, res, next) => {
+  if (!schema || typeof schema.safeParse !== "function") {
+    return res.status(500).json({
+      success: false,
+      message: "Validation schema misconfigured",
+    });
+  }
+
   const result = schema.safeParse(req.body);
   if (!result.success) {
-    const errors = result.error.errors.map((e) => ({
+    const issues = result.error?.issues || result.error?.errors || [];
+    const errors = issues.map((e) => ({
       field: e.path.join("."),
       message: e.message,
     }));

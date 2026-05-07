@@ -1,6 +1,7 @@
 require("dotenv").config();
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
+const { seedAssessments } = require("../src/seed/assessments.seed");
 
 const prisma = new PrismaClient();
 
@@ -2599,6 +2600,8 @@ async function seed() {
     sdCreated++;
   }
 
+  const assessmentSeed = await seedAssessments();
+
   console.log(`\n🎉 Seed complete!`);
   console.log(`   Problems created         : ${created}`);
   console.log(`   Problems skipped         : ${skipped}`);
@@ -2606,6 +2609,9 @@ async function seed() {
   console.log(`   SD questions created     : ${sdCreated}`);
   console.log(`   SD questions skipped     : ${sdSkipped}`);
   console.log(`   Total SD questions       : ${sdCreated + sdSkipped}`);
+  console.log(`   Assessment categories    : ${assessmentSeed.categoryCount}`);
+  console.log(`   Assessment topics        : ${assessmentSeed.topicCount}`);
+  console.log(`   Assessment questions     : ${assessmentSeed.questionCount}`);
 }
 
 seed()

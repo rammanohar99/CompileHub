@@ -45,9 +45,21 @@ const isRetryableError = (err) =>
   err.message?.includes("Connection reset") ||
   err.message?.includes("ConnectionReset");
 
+function detectDbProviderLabel(urlString) {
+  if (!urlString) return "database";
+  try {
+    const host = new URL(urlString).hostname.toLowerCase();
+    if (host.includes("neon.tech")) return "Neon";
+    if (host.includes("googleapis.com") || host.includes("gcp") || host.includes("cloudsql")) return "Cloud SQL";
+    return "database";
+  } catch {
+    return "database";
+  }
+}
+
 /**
  * Retry a single async fn up to maxAttempts times with linear backoff.
- * Used to absorb Neon free-tier cold starts (first query after ~5 min sleep).
+ * Helps absorb transient startup/network hiccups on managed Postgres.
  */
 async function withRetry(fn, label, maxAttempts = 3, baseDelayMs = 3000) {
   let lastErr;
@@ -59,7 +71,10 @@ async function withRetry(fn, label, maxAttempts = 3, baseDelayMs = 3000) {
       lastErr = err;
       if (attempt < maxAttempts) {
         const delay = baseDelayMs * attempt; // 3s, 6s
-        logger.warn(`Neon cold start detected — retrying (${label}) attempt ${attempt}/${maxAttempts} in ${delay}ms...`);
+        const providerLabel = detectDbProviderLabel(process.env.DATABASE_URL);
+        logger.warn(
+          `${providerLabel} connection not ready - retrying (${label}) attempt ${attempt}/${maxAttempts} in ${delay}ms...`
+        );
         await new Promise((r) => setTimeout(r, delay));
       }
     }

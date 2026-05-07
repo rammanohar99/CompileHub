@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "AssessmentQuestion_categoryId_topicId_difficulty_questionType_i" RENAME TO "AssessmentQuestion_categoryId_topicId_difficulty_questionTy_idx";

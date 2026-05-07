@@ -6,14 +6,15 @@
  * @param {string} message
  * @param {*} data
  */
-const sendResponse = (res, statusCode, success, message, data = null) => {
+const sendResponse = (res, statusCode, success, message, data = null, meta = undefined) => {
   const payload = { success, message };
   if (data !== null) payload.data = data;
+  if (meta && typeof meta === "object") payload.meta = meta;
   return res.status(statusCode).json(payload);
 };
 
-const ok = (res, message, data) => sendResponse(res, 200, true, message, data);
-const created = (res, message, data) => sendResponse(res, 201, true, message, data);
+const ok = (res, message, data, meta) => sendResponse(res, 200, true, message, data, meta);
+const created = (res, message, data, meta) => sendResponse(res, 201, true, message, data, meta);
 const badRequest = (res, message) => sendResponse(res, 400, false, message);
 const unauthorized = (res, message = "Unauthorized") => sendResponse(res, 401, false, message);
 const forbidden = (res, message = "Forbidden") => sendResponse(res, 403, false, message);
